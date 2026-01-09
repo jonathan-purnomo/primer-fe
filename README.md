@@ -1,36 +1,150 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Primer Payment Demo
 
-## Getting Started
+A Next.js application for testing Primer SDK payment tokenization. This app allows you to generate `payment_method_token` for various payment methods that can be used with Primer's Payment API.
 
-First, run the development server:
+![Primer Payment Demo](docs/screenshot.png)
+
+## Features
+
+- **Multiple Payment Methods Support**
+  - Credit/Debit Card (hosted input fields)
+  - PayPal (native button)
+  - Google Pay (native button)
+  - Apple Pay (native button)
+  - Klarna (Buy Now Pay Later)
+  - Redirect-based methods (iDEAL, Sofort, Bancontact, etc.)
+
+- **Client Token Input** - Paste your Primer client token to load available payment methods
+- **Payment Method Token Output** - Get the token to use in your API requests
+- **Copy to Clipboard** - Easy one-click copy functionality
+
+## Prerequisites
+
+- Node.js 18+
+- Primer Sandbox Account ([Sign up here](https://dashboard.primer.io))
+- API Key from Primer Dashboard
+
+## Installation
 
 ```bash
+# Clone the repository
+git clone https://github.com/jonathan-purnomo/primer-fe.git
+cd primer-fe
+
+# Install dependencies
+npm install
+
+# Run development server
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Usage
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### 1. Generate Client Token
 
-## Learn More
+First, create a client session via Primer API:
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+curl --location 'https://api.sandbox.primer.io/client-session' \
+--header 'Content-Type: application/json' \
+--header 'X-API-KEY: <your-api-key>' \
+--header 'X-API-VERSION: 2.2' \
+--data '{
+  "orderId": "order-123",
+  "currencyCode": "EUR",
+  "amount": 1000,
+  "order": {
+    "lineItems": [{
+      "itemId": "item-1",
+      "amount": 1000,
+      "quantity": 1,
+      "description": "Test Item"
+    }]
+  }
+}'
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### 2. Load Payment Methods
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+1. Paste the `clientToken` from the API response into the app
+2. Click "Load Payment Methods"
+3. Available payment methods will appear based on your Primer Dashboard configuration
 
-## Deploy on Vercel
+### 3. Complete Payment Flow
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- **Card**: Fill in card details → Click "Get Payment Method Token"
+- **PayPal**: Click PayPal button → Authenticate in popup
+- **Klarna**: Click Klarna button → Complete Klarna flow
+- **Redirect**: Click continue → Complete on provider page
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### 4. Use the Token
+
+Copy the generated `payment_method_token` and use it in your payment API:
+
+```bash
+curl --location 'https://api.sandbox.primer.io/payments' \
+--header 'Content-Type: application/json' \
+--header 'X-API-KEY: <your-api-key>' \
+--header 'X-API-VERSION: 2.2' \
+--data '{
+  "orderId": "order-123",
+  "currencyCode": "EUR",
+  "amount": 1000,
+  "paymentMethodToken": "<token-from-app>"
+}'
+```
+
+## Test Credentials
+
+### Card
+| Field | Value |
+|-------|-------|
+| Card Number | `4111 1111 1111 1111` |
+| Expiry | `03/30` |
+| CVV | `123` |
+| Cardholder | Any name |
+
+### PayPal Sandbox
+Use your PayPal Sandbox buyer account credentials.
+
+## Configuration
+
+Payment methods shown in the app depend on your Primer Dashboard configuration:
+
+1. Go to [Primer Dashboard](https://sandbox-dashboard.primer.io) → Integrations
+2. Click on your integration → Edit Merchant Account
+3. Enable desired payment methods (Card, PayPal, Klarna, etc.)
+4. Click "Finish" and wait 60 seconds
+5. Generate a **new client token** to see the changes
+
+## Project Structure
+
+```
+src/
+├── app/
+│   ├── page.tsx          # Main page with client token input
+│   ├── layout.tsx        # Root layout
+│   └── globals.css       # Global styles + Primer input styles
+└── components/
+    └── PrimerCheckout.tsx  # Primer SDK integration component
+```
+
+## Tech Stack
+
+- [Next.js 16](https://nextjs.org/) - React Framework
+- [Primer Web SDK](https://www.npmjs.com/package/@primer-io/checkout-web) - Payment SDK
+- [Tailwind CSS](https://tailwindcss.com/) - Styling
+- [TypeScript](https://www.typescriptlang.org/) - Type Safety
+
+## API Reference
+
+- [Primer API Docs](https://apiref.primer.io/)
+- [Primer Web SDK Docs](https://primer.io/docs/sdks/web)
+- [Client Session API](https://apiref.primer.io/reference/create_client_side_token_client_session_post)
+- [Payments API](https://apiref.primer.io/reference/create_payment)
+
+## License
+
+MIT
