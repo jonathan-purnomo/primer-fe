@@ -9,10 +9,20 @@ import type {
   PrimerHeadlessCheckout,
 } from "@primer-io/checkout-web";
 
+// Payment result interface for completed payments (AUTO mode)
+export interface PaymentResult {
+  id?: string;
+  status?: string;
+  orderId?: string;
+}
+
 interface PrimerCheckoutProps {
   clientToken: string;
   onPaymentMethodToken: (token: string, paymentMethodType: string) => void;
+  onPaymentComplete?: (payment: PaymentResult) => void;
   onError: (error: string) => void;
+  // Mode: "MANUAL" = stop at tokenization, "AUTO" = full checkout flow with redirect
+  paymentHandling?: "MANUAL" | "AUTO";
 }
 
 type PaymentMethodType =
@@ -32,7 +42,9 @@ interface AvailablePaymentMethod {
 export default function PrimerCheckout({
   clientToken,
   onPaymentMethodToken,
+  onPaymentComplete,
   onError,
+  paymentHandling = "MANUAL",
 }: PrimerCheckoutProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const primerRef = useRef<PrimerHeadlessCheckout | null>(null);
@@ -42,6 +54,7 @@ export default function PrimerCheckout({
   const [availablePaymentMethods, setAvailablePaymentMethods] = useState<AvailablePaymentMethod[]>([]);
   const [selectedMethod, setSelectedMethod] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isRedirecting, setIsRedirecting] = useState(false);
 
   const initializePrimer = useCallback(async () => {
     if (!clientToken || !containerRef.current) return;
@@ -71,8 +84,7 @@ export default function PrimerCheckout({
       const { Primer } = await import("@primer-io/checkout-web");
 
       const primer = await Primer.createHeadless(clientToken, {
-        // MANUAL mode: stop after tokenization, don't proceed to payment
-        paymentHandling: "MANUAL",
+        paymentHandling: paymentHandling,
         onAvailablePaymentMethodsLoad: (paymentMethods: PaymentMethodInfo[]) => {
           console.log("Available payment methods:", paymentMethods);
           const methods = paymentMethods.map((pm) => ({
@@ -82,23 +94,58 @@ export default function PrimerCheckout({
           }));
           setAvailablePaymentMethods(methods);
         },
-        onTokenizeSuccess: async (paymentMethod) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        onTokenizeSuccess: async (paymentMethod: any, handler?: any) => {
           console.log("Tokenize success:", paymentMethod);
-          setIsProcessing(false);
+
+          // Always provide the token
           onPaymentMethodToken(paymentMethod.token, paymentMethod.paymentInstrumentType || "UNKNOWN");
+
+          if (paymentHandling === "AUTO" && handler) {
+            // AUTO mode: continue to payment (may redirect for PayPal/Klarna)
+            console.log("AUTO mode: continuing to payment...");
+            setIsRedirecting(true);
+            try {
+              await handler.handleSuccess();
+            } catch (err) {
+              console.error("Handler error:", err);
+              setIsRedirecting(false);
+              setIsProcessing(false);
+              onError(err instanceof Error ? err.message : "Payment failed");
+            }
+          } else {
+            // MANUAL mode: stop here with token
+            setIsProcessing(false);
+          }
         },
         onTokenizeError: (error) => {
           console.error("Tokenize error:", error);
           setIsProcessing(false);
+          setIsRedirecting(false);
           onError(error?.message || "Tokenization failed");
         },
-        onCheckoutComplete: (data) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        onCheckoutComplete: (data: any) => {
           console.log("Checkout complete:", data);
           setIsProcessing(false);
+          setIsRedirecting(false);
+
+          // Extract payment result for AUTO mode
+          const paymentResult: PaymentResult = {
+            id: data?.payment?.id,
+            status: data?.payment?.status,
+            orderId: data?.payment?.orderId,
+          };
+
+          if (onPaymentComplete) {
+            onPaymentComplete(paymentResult);
+          }
         },
-        onCheckoutFail: (error) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        onCheckoutFail: (error: any) => {
           console.error("Checkout failed:", error);
           setIsProcessing(false);
+          setIsRedirecting(false);
           onError(error?.message || "Checkout failed");
         },
       });
@@ -115,7 +162,7 @@ export default function PrimerCheckout({
     } finally {
       setIsLoading(false);
     }
-  }, [clientToken, onPaymentMethodToken, onError]);
+  }, [clientToken, onPaymentMethodToken, onPaymentComplete, onError, paymentHandling]);
 
   const getPaymentMethodName = (type: string): string => {
     const names: Record<string, string> = {
@@ -412,11 +459,21 @@ export default function PrimerCheckout({
         </div>
       )}
 
-      {isProcessing && (
+      {isProcessing && !isRedirecting && (
         <div className="absolute inset-0 bg-white/80 flex items-center justify-center z-10 rounded-lg">
           <div className="flex items-center gap-2">
             <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
             <span className="text-gray-600">Processing...</span>
+          </div>
+        </div>
+      )}
+
+      {isRedirecting && (
+        <div className="absolute inset-0 bg-white/80 flex items-center justify-center z-10 rounded-lg">
+          <div className="flex flex-col items-center gap-3">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+            <span className="text-gray-600 font-medium">Redirecting to payment provider...</span>
+            <span className="text-gray-400 text-sm">Please complete payment in the new window</span>
           </div>
         </div>
       )}

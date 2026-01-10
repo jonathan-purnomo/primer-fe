@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import dynamic from "next/dynamic";
+import type { PaymentResult } from "@/components/PrimerCheckout";
 
 // Dynamic import to avoid SSR issues with Primer SDK
 const PrimerCheckout = dynamic(() => import("@/components/PrimerCheckout"), {
@@ -11,13 +12,17 @@ const PrimerCheckout = dynamic(() => import("@/components/PrimerCheckout"), {
   ),
 });
 
+type PaymentMode = "MANUAL" | "AUTO";
+
 export default function Home() {
   const [clientToken, setClientToken] = useState("");
   const [activeToken, setActiveToken] = useState("");
   const [paymentMethodToken, setPaymentMethodToken] = useState("");
   const [paymentMethodType, setPaymentMethodType] = useState("");
+  const [paymentResult, setPaymentResult] = useState<PaymentResult | null>(null);
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
+  const [paymentMode, setPaymentMode] = useState<PaymentMode>("MANUAL");
 
   const handleLoadCheckout = () => {
     if (!clientToken.trim()) {
@@ -27,7 +32,14 @@ export default function Home() {
     setError("");
     setPaymentMethodToken("");
     setPaymentMethodType("");
+    setPaymentResult(null);
     setActiveToken(clientToken.trim());
+  };
+
+  const handlePaymentComplete = (result: PaymentResult) => {
+    console.log("Payment complete:", result);
+    setPaymentResult(result);
+    setError("");
   };
 
   const handlePaymentMethodToken = (token: string, type: string) => {
@@ -86,6 +98,44 @@ export default function Home() {
             className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all resize-none font-mono text-sm text-gray-800"
             rows={4}
           />
+          {/* Payment Mode Selector */}
+          <div className="mt-4 p-4 bg-gray-50 rounded-lg">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Payment Handling Mode
+            </label>
+            <div className="flex gap-4">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="paymentMode"
+                  value="MANUAL"
+                  checked={paymentMode === "MANUAL"}
+                  onChange={() => setPaymentMode("MANUAL")}
+                  className="text-blue-600"
+                />
+                <span className="text-sm text-gray-700">MANUAL</span>
+                <span className="text-xs text-gray-400">(Token only)</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="paymentMode"
+                  value="AUTO"
+                  checked={paymentMode === "AUTO"}
+                  onChange={() => setPaymentMode("AUTO")}
+                  className="text-blue-600"
+                />
+                <span className="text-sm text-gray-700">AUTO</span>
+                <span className="text-xs text-gray-400">(Full checkout)</span>
+              </label>
+            </div>
+            <p className="text-xs text-gray-500 mt-2">
+              {paymentMode === "MANUAL"
+                ? "Stops after tokenization. Use token in your own API."
+                : "Full checkout flow. Primer processes payment and handles redirects."}
+            </p>
+          </div>
+
           <button
             onClick={handleLoadCheckout}
             className="w-full mt-4 bg-gray-900 hover:bg-gray-800 text-white font-medium py-3 px-4 rounded-lg transition-colors"
@@ -123,11 +173,16 @@ export default function Home() {
         <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">
             Payment Methods
+            <span className="ml-2 text-xs font-normal text-gray-400 uppercase">
+              {paymentMode} mode
+            </span>
           </h2>
           <PrimerCheckout
             clientToken={activeToken}
             onPaymentMethodToken={handlePaymentMethodToken}
+            onPaymentComplete={handlePaymentComplete}
             onError={handleError}
+            paymentHandling={paymentMode}
           />
         </div>
 
@@ -210,6 +265,68 @@ export default function Home() {
               </code>{" "}
               in your API request body.
             </p>
+          </div>
+        )}
+
+        {/* Payment Complete Section (AUTO mode) */}
+        {paymentResult && (
+          <div className="bg-blue-50 border border-blue-200 rounded-xl p-6 mb-6">
+            <div className="flex items-start gap-3 mb-3">
+              <svg
+                className="h-5 w-5 text-blue-500 flex-shrink-0"
+                viewBox="0 0 20 20"
+                fill="currentColor"
+              >
+                <path
+                  fillRule="evenodd"
+                  d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                  clipRule="evenodd"
+                />
+              </svg>
+              <div>
+                <h3 className="text-sm font-medium text-blue-800">
+                  Payment Completed!
+                </h3>
+                <p className="text-xs text-blue-600 mt-1">
+                  Checkout flow completed via Primer (AUTO mode).
+                </p>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-lg p-4 border border-blue-200 space-y-3">
+              {paymentResult.id && (
+                <div>
+                  <p className="text-xs text-gray-500">Payment ID</p>
+                  <code className="text-sm text-gray-800 font-mono">
+                    {paymentResult.id}
+                  </code>
+                </div>
+              )}
+              {paymentResult.status && (
+                <div>
+                  <p className="text-xs text-gray-500">Status</p>
+                  <span
+                    className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                      paymentResult.status === "SUCCESS"
+                        ? "bg-green-100 text-green-800"
+                        : paymentResult.status === "PENDING"
+                        ? "bg-yellow-100 text-yellow-800"
+                        : "bg-gray-100 text-gray-800"
+                    }`}
+                  >
+                    {paymentResult.status}
+                  </span>
+                </div>
+              )}
+              {paymentResult.orderId && (
+                <div>
+                  <p className="text-xs text-gray-500">Order ID</p>
+                  <code className="text-sm text-gray-800 font-mono">
+                    {paymentResult.orderId}
+                  </code>
+                </div>
+              )}
+            </div>
           </div>
         )}
 
