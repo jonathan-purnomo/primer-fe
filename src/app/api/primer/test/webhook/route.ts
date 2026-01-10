@@ -68,3 +68,12 @@ export async function GET() {
     events: webhookEvents.slice(-20).reverse(), // Return last 20 events, newest first
   });
 }
+
+// DELETE /api/primer/test/webhook - Clear all webhook events
+export async function DELETE() {
+  webhookEvents.length = 0;
+  return NextResponse.json({
+    success: true,
+    message: "All webhook events cleared",
+  });
+}
