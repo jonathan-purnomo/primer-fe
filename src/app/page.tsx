@@ -1,8 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import dynamic from "next/dynamic";
 import type { PaymentResult } from "@/components/PrimerCheckout";
+
+interface WebhookEvent {
+  timestamp: string;
+  eventType: string;
+  payload: Record<string, unknown>;
+}
 
 // Dynamic import to avoid SSR issues with Primer SDK
 const PrimerCheckout = dynamic(() => import("@/components/PrimerCheckout"), {
@@ -23,6 +29,31 @@ export default function Home() {
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
   const [paymentMode, setPaymentMode] = useState<PaymentMode>("MANUAL");
+  const [webhookEvents, setWebhookEvents] = useState<WebhookEvent[]>([]);
+  const [isPolling, setIsPolling] = useState(false);
+
+  // Fetch webhook events from the API
+  const fetchWebhookEvents = useCallback(async () => {
+    try {
+      const response = await fetch("/api/primer/test/webhook");
+      const data = await response.json();
+      if (data.events) {
+        setWebhookEvents(data.events);
+      }
+    } catch (err) {
+      console.error("Failed to fetch webhook events:", err);
+    }
+  }, []);
+
+  // Poll for webhook events when polling is enabled
+  useEffect(() => {
+    if (!isPolling) return;
+
+    fetchWebhookEvents();
+    const interval = setInterval(fetchWebhookEvents, 3000);
+
+    return () => clearInterval(interval);
+  }, [isPolling, fetchWebhookEvents]);
 
   const handleLoadCheckout = () => {
     if (!clientToken.trim()) {
@@ -329,6 +360,78 @@ export default function Home() {
             </div>
           </div>
         )}
+
+        {/* Webhook Events Section */}
+        <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold text-gray-900">
+              Webhook Events
+            </h2>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={fetchWebhookEvents}
+                className="text-sm text-gray-600 hover:text-gray-800 flex items-center gap-1"
+              >
+                <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                  <path
+                    fillRule="evenodd"
+                    d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+                Refresh
+              </button>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={isPolling}
+                  onChange={(e) => setIsPolling(e.target.checked)}
+                  className="rounded text-blue-600"
+                />
+                <span className="text-sm text-gray-600">Auto-refresh</span>
+              </label>
+            </div>
+          </div>
+
+          <p className="text-xs text-gray-500 mb-4">
+            Webhook URL: <code className="bg-gray-100 px-1 rounded">https://primer-fe-poc.netlify.app/api/primer/test/webhook</code>
+          </p>
+
+          {webhookEvents.length === 0 ? (
+            <div className="text-center py-8 text-gray-400">
+              <svg
+                className="h-12 w-12 mx-auto mb-3 opacity-50"
+                viewBox="0 0 20 20"
+                fill="currentColor"
+              >
+                <path d="M5 3a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2V5a2 2 0 00-2-2H5zM5 11a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2v-2a2 2 0 00-2-2H5zM11 5a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V5zM14 11a1 1 0 011 1v1h1a1 1 0 110 2h-1v1a1 1 0 11-2 0v-1h-1a1 1 0 110-2h1v-1a1 1 0 011-1z" />
+              </svg>
+              <p className="text-sm">No webhook events received yet</p>
+              <p className="text-xs mt-1">Enable auto-refresh and trigger a payment to see events</p>
+            </div>
+          ) : (
+            <div className="space-y-3 max-h-96 overflow-y-auto">
+              {webhookEvents.map((event, index) => (
+                <div
+                  key={`${event.timestamp}-${index}`}
+                  className="border border-gray-200 rounded-lg p-4"
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                      {event.eventType}
+                    </span>
+                    <span className="text-xs text-gray-400">
+                      {new Date(event.timestamp).toLocaleString()}
+                    </span>
+                  </div>
+                  <pre className="text-xs bg-gray-50 p-3 rounded overflow-x-auto text-gray-700">
+                    {JSON.stringify(event.payload, null, 2)}
+                  </pre>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
 
         {/* Instructions */}
         <div className="mt-8 text-center text-sm text-gray-500">
