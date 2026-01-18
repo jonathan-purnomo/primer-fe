@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 const webhookEvents: Array<{
   timestamp: string;
   eventType: string;
-  host: string;
+  sourceIp: string;
   headers: Record<string, string>;
   payload: unknown;
 }> = [];
@@ -18,8 +18,14 @@ export async function POST(request: NextRequest) {
     // Extract event type from payload
     const eventType = payload.eventType || payload.type || "UNKNOWN";
 
-    // Extract host and headers
-    const host = request.headers.get("host") || request.nextUrl.host || "unknown";
+    // Extract source IP (the IP of the sender, e.g., Primer's server)
+    const sourceIp =
+      request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+      request.headers.get("x-real-ip") ||
+      request.headers.get("cf-connecting-ip") ||
+      request.headers.get("x-nf-client-connection-ip") || // Netlify
+      request.ip ||
+      "unknown";
     const headers = Object.fromEntries(request.headers.entries());
 
     // Log the webhook event
@@ -28,7 +34,7 @@ export async function POST(request: NextRequest) {
     console.log("=".repeat(60));
     console.log("Timestamp:", timestamp);
     console.log("Event Type:", eventType);
-    console.log("Host:", host);
+    console.log("Source IP:", sourceIp);
     console.log("Headers:", headers);
     console.log("Payload:", JSON.stringify(payload, null, 2));
     console.log("=".repeat(60) + "\n");
@@ -37,7 +43,7 @@ export async function POST(request: NextRequest) {
     webhookEvents.push({
       timestamp,
       eventType,
-      host,
+      sourceIp,
       headers,
       payload,
     });

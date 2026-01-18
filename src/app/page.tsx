@@ -7,7 +7,7 @@ import type { PaymentResult } from "@/components/PrimerCheckout";
 interface WebhookEvent {
   timestamp: string;
   eventType: string;
-  host: string;
+  sourceIp: string;
   headers: Record<string, string>;
   payload: Record<string, unknown>;
 }
@@ -449,9 +449,9 @@ export default function Home() {
                       {new Date(event.timestamp).toLocaleString()}
                     </span>
                   </div>
-                  {event.host && (
+                  {event.sourceIp && (
                     <div className="mb-2 text-xs text-gray-500">
-                      <span className="font-medium">Host:</span> {event.host}
+                      <span className="font-medium">Source IP:</span> {event.sourceIp}
                     </div>
                   )}
                   {event.headers && Object.keys(event.headers).length > 0 && (
