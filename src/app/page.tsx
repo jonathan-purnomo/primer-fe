@@ -7,6 +7,8 @@ import type { PaymentResult } from "@/components/PrimerCheckout";
 interface WebhookEvent {
   timestamp: string;
   eventType: string;
+  host: string;
+  headers: Record<string, string>;
   payload: Record<string, unknown>;
 }
 
@@ -447,9 +449,29 @@ export default function Home() {
                       {new Date(event.timestamp).toLocaleString()}
                     </span>
                   </div>
-                  <pre className="text-xs bg-gray-50 p-3 rounded overflow-x-auto text-gray-700">
-                    {JSON.stringify(event.payload, null, 2)}
-                  </pre>
+                  {event.host && (
+                    <div className="mb-2 text-xs text-gray-500">
+                      <span className="font-medium">Host:</span> {event.host}
+                    </div>
+                  )}
+                  {event.headers && Object.keys(event.headers).length > 0 && (
+                    <details className="mb-2">
+                      <summary className="text-xs text-gray-500 cursor-pointer hover:text-gray-700">
+                        Headers ({Object.keys(event.headers).length})
+                      </summary>
+                      <pre className="text-xs bg-blue-50 p-2 rounded mt-1 overflow-x-auto text-gray-600">
+                        {JSON.stringify(event.headers, null, 2)}
+                      </pre>
+                    </details>
+                  )}
+                  <details open>
+                    <summary className="text-xs text-gray-500 cursor-pointer hover:text-gray-700 mb-1">
+                      Payload
+                    </summary>
+                    <pre className="text-xs bg-gray-50 p-3 rounded overflow-x-auto text-gray-700">
+                      {JSON.stringify(event.payload, null, 2)}
+                    </pre>
+                  </details>
                 </div>
               ))}
             </div>
